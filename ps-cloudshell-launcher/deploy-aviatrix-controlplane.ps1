@@ -111,7 +111,7 @@ param(
     [string]$CustomerID,
     
     [Parameter(Mandatory = $false)]
-    [bool]$IncludeCopilot = $false,
+    [bool]$IncludeCopilot = $true,
     
     [Parameter(Mandatory = $false)]
     [string]$YourPublicIP,
@@ -662,7 +662,7 @@ function Get-DeploymentParameters {
         $copilotChoice = Get-UserInput `
             -Prompt "Deploy CoPilot for analytics" `
             -ValidValues @("y", "n", "yes", "no") `
-            -DefaultValue "n" `
+            -DefaultValue "y" `
             -HelpText "Choose 'y' for yes or 'n' for no"
         $IncludeCopilot = $copilotChoice -in @("y", "yes")
         Write-SectionEnd "Cyan"
