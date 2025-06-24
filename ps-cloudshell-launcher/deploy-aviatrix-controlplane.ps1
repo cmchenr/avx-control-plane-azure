@@ -34,8 +34,8 @@
 .PARAMETER IncludeCopilot
     Deploy optional CoPilot for advanced analytics (default: false)
     
-.PARAMETER YourPublicIP
-    Your public IP address for controller access (auto-detected if not provided)
+.PARAMETER IncomingMgmtCIDRs
+    Your public IP address or CIDR block for controller access (auto-detected if not provided)
     
 .PARAMETER AdditionalManagementIPs
     Additional IP addresses or CIDR blocks that should have access to the controller management interface.
@@ -122,7 +122,7 @@ param(
     [bool]$IncludeCopilot = $true,
     
     [Parameter(Mandatory = $false)]
-    [string]$YourPublicIP,
+    [string]$IncomingMgmtCIDRs,
     
     [Parameter(Mandatory = $false)]
     [ValidateScript({
@@ -484,9 +484,9 @@ function Test-Prerequisites {
 }
 
 function Get-PublicIP {
-    if ($YourPublicIP) {
-        Write-Info "Using provided public IP: $YourPublicIP"
-        return $YourPublicIP
+    if ($IncomingMgmtCIDRs) {
+        Write-Info "Using provided IP/CIDR: $IncomingMgmtCIDRs"
+        return $IncomingMgmtCIDRs
     }
     
     Write-Step "Detecting your public IP address for security configuration..."
@@ -554,9 +554,9 @@ function Get-AdditionalManagementIPs {
         return $ips
     }
     
-    Write-Info "You can specify additional IP addresses that should have access to the controller."
-    Write-Info "This is useful for allowing access from your laptop, office network, etc."
-    Write-Hint "Leave empty if you only need access from this CloudShell session."
+    Write-Info "Specify additional IP addresses that should have access to the Controller and CoPilot."
+    Write-Info "This is highly recommended for allowing access from your laptop, office network, etc."
+    Write-Hint "Leave empty if you only would like to manually edit the security groups later."
     
     do {
         Write-InputPrompt -Message "Additional Management IP Addresses (optional)" -Example "192.168.1.100, 10.0.0.0/24, 203.0.113.50/32" -Required $false
@@ -824,8 +824,8 @@ function New-TerraformConfiguration {
     
     # Build the incoming_ssl_cidrs array
     $allCidrs = @("$($Config.UserPublicIP)/32")
-    if ($Config.AdditionalManagementIPs -and $Config.AdditionalManagementIPs.Count -gt 0) {
-        $allCidrs += $Config.AdditionalManagementIPs
+    if ($Config.AdditionalManagementIPs -and @($Config.AdditionalManagementIPs).Count -gt 0) {
+        $allCidrs += @($Config.AdditionalManagementIPs)
     }
     
     # Format CIDRs for terraform - each CIDR quoted and comma-separated
@@ -1253,10 +1253,10 @@ try {
         Write-Host "CloudShell IP: " -NoNewline -ForegroundColor White
         Write-Host "$($config.UserPublicIP)" -ForegroundColor Yellow
         
-        if ($config.AdditionalManagementIPs -and $config.AdditionalManagementIPs.Count -gt 0) {
+        if ($config.AdditionalManagementIPs -and @($config.AdditionalManagementIPs).Count -gt 0) {
             Write-Host "├─ " -NoNewline -ForegroundColor Cyan
             Write-Host "Additional Management IPs: " -NoNewline -ForegroundColor White
-            Write-Host "$($config.AdditionalManagementIPs -join ', ')" -ForegroundColor Yellow
+            Write-Host "$(@($config.AdditionalManagementIPs) -join ', ')" -ForegroundColor Yellow
         }
         
         Write-Host "└─ " -NoNewline -ForegroundColor Cyan

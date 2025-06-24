@@ -100,7 +100,7 @@ The script will prompt you for all required information with helpful guidance.
 | `AdminPassword` | No* | Secure admin password | `"MySecure123!"` |
 | `CustomerID` | No* | Aviatrix license ID | `"aviatrix-abc-123456"` |
 | `IncludeCopilot` | No | Deploy CoPilot analytics | `$true` or `$false` |
-| `YourPublicIP` | No | Your public IP (auto-detected) | `"203.0.113.1"` |
+| `IncomingMgmtCIDRs` | No | Your public IP/CIDR (auto-detected) | `"203.0.113.1"` |
 | `AdditionalManagementIPs` | No | Additional IPs for controller access | `"192.168.1.100,10.0.0.0/24"` |
 | `SkipConfirmation` | No | Skip interactive prompts | Switch parameter |
 | `TerraformAction` | No | Terraform action | `"plan"`, `"apply"`, `"destroy"` |
@@ -176,7 +176,7 @@ Re-run the script with `-IncludeCopilot $true` to add CoPilot to an existing dep
 | "Invalid customer ID" | Contact Aviatrix support for license |
 | "Password validation failed" | Use 8+ chars with letter+number+symbol |
 | "Region not available" | Try different Azure region |
-| "IP detection failed" | Manually specify `-YourPublicIP` parameter |
+| "IP detection failed" | Manually specify `-IncomingMgmtCIDRs` parameter |
 
 ### Getting Help
 - **Aviatrix Documentation**: https://docs.aviatrix.com

@@ -52,7 +52,7 @@ This directory contains example scripts and configurations for various Aviatrix 
   -AdminPassword "ProdSecure123!" `
   -CustomerID "aviatrix-abc-123456" `
   -IncludeCopilot $true `
-  -YourPublicIP "203.0.113.100" `
+  -IncomingMgmtCIDRs "203.0.113.100" `
   -SkipConfirmation
 ```
 
