@@ -73,14 +73,20 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [ValidatePattern("^[a-zA-Z0-9-]{3,20}$")]
+    [ValidateScript({
+        if ([string]::IsNullOrEmpty($_)) { return $true }
+        return $_ -match "^[a-zA-Z0-9-]{3,20}$"
+    })]
     [string]$DeploymentName,
     
     [Parameter(Mandatory = $false)]
     [string]$Location,
     
     [Parameter(Mandatory = $false)]
-    [ValidatePattern("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")]
+    [ValidateScript({
+        if ([string]::IsNullOrEmpty($_)) { return $true }
+        return $_ -match "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    })]
     [string]$AdminEmail,
     
     [Parameter(Mandatory = $false)]
@@ -102,7 +108,6 @@ param(
     [string]$AdminPassword,
     
     [Parameter(Mandatory = $false)]
-    [ValidatePattern("^aviatrix-[a-zA-Z0-9-]+$")]
     [string]$CustomerID,
     
     [Parameter(Mandatory = $false)]
@@ -353,8 +358,8 @@ function Get-DeploymentParameters {
     }
     
     if (-not $CustomerID) {
-        Write-Host "Format: aviatrix-abc-123456 (contact Aviatrix support if you don't have this)" -ForegroundColor Gray
-        $CustomerID = Get-UserInput -Prompt "Enter Aviatrix customer license ID" -ValidationPattern "^aviatrix-[a-zA-Z0-9-]+$"
+        Write-Host "Enter your Aviatrix customer license ID (contact Aviatrix support if you don't have this)" -ForegroundColor Gray
+        $CustomerID = Get-UserInput -Prompt "Enter Aviatrix customer license ID"
     }
     
     if (-not $PSBoundParameters.ContainsKey('IncludeCopilot')) {
