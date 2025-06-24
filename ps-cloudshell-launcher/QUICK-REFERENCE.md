@@ -115,6 +115,7 @@ Remove-Item ./aviatrix-deployment -Recurse -Force
 | Error | Solution |
 |-------|----------|
 | "Not authenticated" | Run `az login` |
+| "Azure AD permissions required" | Run `az login` again or contact Azure AD admin |
 | "Invalid customer ID" | Check format: `aviatrix-abc-123456` |
 | "Password validation" | 8+ chars, letter+number+symbol |
 | "Region unavailable" | Try different Azure region |

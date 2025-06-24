@@ -37,6 +37,10 @@
 .PARAMETER YourPublicIP
     Your public IP address for controller access (auto-detected if not provided)
     
+.PARAMETER AdditionalManagementIPs
+    Additional IP addresses or CIDR blocks that should have access to the controller management interface.
+    Supports comma-separated list (e.g., "192.168.1.100,10.0.0.0/24,203.0.113.50")
+    
 .PARAMETER SkipConfirmation
     Skip interactive confirmation prompts (for automation)
     
@@ -57,6 +61,10 @@
 .EXAMPLE
     # Deploy with CoPilot included
     ./deploy-aviatrix-controlplane.ps1 -DeploymentName "my-avx-ctrl" -IncludeCopilot $true
+    
+.EXAMPLE
+    # Deploy with additional management IP addresses
+    ./deploy-aviatrix-controlplane.ps1 -DeploymentName "my-avx-ctrl" -AdditionalManagementIPs "192.168.1.100,10.0.0.0/24"
     
 .EXAMPLE
     # One-liner download and execute (replace URL with your GitHub raw URL)
@@ -115,6 +123,31 @@ param(
     
     [Parameter(Mandatory = $false)]
     [string]$YourPublicIP,
+    
+    [Parameter(Mandatory = $false)]
+    [ValidateScript({
+        if ([string]::IsNullOrEmpty($_)) { return $true }
+        # Support comma-separated list of IPs/CIDRs
+        $cidrs = $_ -split ',' | ForEach-Object { $_.Trim() }
+        foreach ($cidr in $cidrs) {
+            # Validate IP/CIDR format with strict IP address validation
+            if ($cidr -match '^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/(\d{1,2}))?$') {
+                $ip1, $ip2, $ip3, $ip4, $dummy, $mask = $matches[1..6]
+                # Check IP octets are valid (0-255)
+                if ([int]$ip1 -gt 255 -or [int]$ip2 -gt 255 -or [int]$ip3 -gt 255 -or [int]$ip4 -gt 255) {
+                    throw "Invalid IP address in CIDR: $cidr. IP octets must be 0-255"
+                }
+                # Check CIDR mask is valid (0-32) if present
+                if ($mask -and ([int]$mask -lt 0 -or [int]$mask -gt 32)) {
+                    throw "Invalid CIDR mask in: $cidr. Mask must be 0-32"
+                }
+            } else {
+                throw "Invalid IP/CIDR format: $cidr. Use format like '192.168.1.1' or '192.168.1.0/24'"
+            }
+        }
+        return $true
+    })]
+    [string]$AdditionalManagementIPs,
     
     [Parameter(Mandatory = $false)]
     [switch]$SkipConfirmation,
@@ -478,6 +511,95 @@ function Get-PublicIP {
     }
 }
 
+function Test-IPCIDRFormat {
+    param([string]$InputString)
+    
+    if ([string]::IsNullOrWhiteSpace($InputString)) {
+        return $true
+    }
+    
+    $cidrs = $InputString -split ',' | ForEach-Object { $_.Trim() }
+    foreach ($cidr in $cidrs) {
+        # Validate IP/CIDR format with strict IP address validation
+        if ($cidr -match '^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/(\d{1,2}))?$') {
+            $ip1, $ip2, $ip3, $ip4, $dummy, $mask = $matches[1..6]
+            # Check IP octets are valid (0-255)
+            if ([int]$ip1 -gt 255 -or [int]$ip2 -gt 255 -or [int]$ip3 -gt 255 -or [int]$ip4 -gt 255) {
+                return $false
+            }
+            # Check CIDR mask is valid (0-32) if present
+            if ($mask -and ([int]$mask -lt 0 -or [int]$mask -gt 32)) {
+                return $false
+            }
+        } else {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Get-AdditionalManagementIPs {
+    if ($AdditionalManagementIPs) {
+        Write-Info "Using provided additional management IPs: $AdditionalManagementIPs"
+        # Convert comma-separated string to array and validate format
+        $ips = $AdditionalManagementIPs -split ',' | ForEach-Object { 
+            $cidr = $_.Trim()
+            # Add /32 if no CIDR specified and it's a single IP
+            if ($cidr -match '^(\d{1,3}\.){3}\d{1,3}$') {
+                "$cidr/32"
+            } else {
+                $cidr
+            }
+        }
+        return $ips
+    }
+    
+    Write-Info "You can specify additional IP addresses that should have access to the controller."
+    Write-Info "This is useful for allowing access from your laptop, office network, etc."
+    Write-Hint "Leave empty if you only need access from this CloudShell session."
+    
+    do {
+        Write-InputPrompt -Message "Additional Management IP Addresses (optional)" -Example "192.168.1.100, 10.0.0.0/24, 203.0.113.50/32" -Required $false
+        Write-Host "│  Help: Comma-separated list of IPs or CIDR blocks" -ForegroundColor Gray
+        Write-Host "│  Default: (none - only CloudShell access)" -ForegroundColor Green
+        Write-Host "│" -ForegroundColor Cyan
+        Write-Host "└─ Enter value [press Enter for default]: " -NoNewline -ForegroundColor Cyan
+        
+        $additionalIPs = Read-Host
+        
+        if ([string]::IsNullOrWhiteSpace($additionalIPs)) {
+            Write-Host "   Using default value: (none)" -ForegroundColor Green
+            return @()
+        }
+        
+        if (Test-IPCIDRFormat -InputString $additionalIPs) {
+            Write-Host "   ✓ Accepted: $additionalIPs" -ForegroundColor White
+            break
+        } else {
+            Write-Host ""
+            Write-Host "╭─ Input Error" -ForegroundColor Red
+            Write-Host "│  Invalid IP/CIDR format. Please check your input and try again." -ForegroundColor Yellow
+            Write-Host "│  Each IP must have octets 0-255, CIDR masks must be 0-32" -ForegroundColor Yellow
+            Write-Host "╰─ Please try again" -ForegroundColor Red
+            Write-Host ""
+        }
+    } while ($true)
+    
+    # Convert comma-separated string to array and ensure proper CIDR format
+    $ips = $additionalIPs -split ',' | ForEach-Object { 
+        $cidr = $_.Trim()
+        # Add /32 if no CIDR specified and it's a single IP
+        if ($cidr -match '^(\d{1,3}\.){3}\d{1,3}$') {
+            "$cidr/32"
+        } else {
+            $cidr
+        }
+    }
+    
+    Write-Success "Additional management IPs configured: $($ips -join ', ')"
+    return $ips
+}
+
 function Get-DeploymentParameters {
     Write-Banner "Aviatrix Control Plane Deployment Configuration" "Cyan"
     
@@ -671,6 +793,10 @@ function Get-DeploymentParameters {
     # Get public IP
     Write-Section "Network Security Configuration" "Cyan"
     $script:UserPublicIP = Get-PublicIP
+    Write-Host ""
+    Write-Info "Additional management IP addresses can be configured for accessing the controller."
+    Write-Info "This allows access from your laptop, office network, or other trusted locations."
+    $script:AdditionalManagementIPs = Get-AdditionalManagementIPs
     Write-SectionEnd "Cyan"
     
     return @{
@@ -681,6 +807,7 @@ function Get-DeploymentParameters {
         CustomerID = $CustomerID
         IncludeCopilot = $IncludeCopilot
         UserPublicIP = $script:UserPublicIP
+        AdditionalManagementIPs = $script:AdditionalManagementIPs
     }
 }
 
@@ -694,6 +821,15 @@ function New-TerraformConfiguration {
         Remove-Item $TerraformDir -Recurse -Force
     }
     New-Item -ItemType Directory -Path $TerraformDir -Force | Out-Null
+    
+    # Build the incoming_ssl_cidrs array
+    $allCidrs = @("$($Config.UserPublicIP)/32")
+    if ($Config.AdditionalManagementIPs -and $Config.AdditionalManagementIPs.Count -gt 0) {
+        $allCidrs += $Config.AdditionalManagementIPs
+    }
+    
+    # Format CIDRs for terraform - each CIDR quoted and comma-separated
+    $cidrString = ($allCidrs | ForEach-Object { "`"$_`"" }) -join ', '
     
     # Create main.tf
     $mainTf = @"
@@ -723,7 +859,7 @@ module "aviatrix_controlplane" {
   controller_admin_password = "$($Config.AdminPassword)"
   
   # Network Security
-  incoming_ssl_cidrs = ["$($Config.UserPublicIP)/32"]
+  incoming_ssl_cidrs = [$cidrString]
   
   # Account Configuration  
   access_account_name = "Azure-Primary"
@@ -931,8 +1067,19 @@ function Invoke-TerraformDeployment {
                     Write-Host "│" -ForegroundColor Cyan
                 }
                 
-                Write-Host "└─ 🔒 Security: Access restricted to " -NoNewline -ForegroundColor White
-                Write-Host "$($Config.UserPublicIP)" -ForegroundColor Yellow
+                # Build comprehensive security display
+                Write-Host "└─ 🔒 Security: Access restricted to " -ForegroundColor White
+                Write-Host "   • " -NoNewline -ForegroundColor White
+                Write-Host "$($Config.UserPublicIP)" -NoNewline -ForegroundColor Yellow
+                Write-Host " (CloudShell)" -ForegroundColor Gray
+                
+                if ($Config.AdditionalManagementIPs -and $Config.AdditionalManagementIPs.Count -gt 0) {
+                    foreach ($ip in $Config.AdditionalManagementIPs) {
+                        Write-Host "   • " -NoNewline -ForegroundColor White
+                        Write-Host "$ip" -NoNewline -ForegroundColor Yellow
+                        Write-Host " (Management)" -ForegroundColor Gray
+                    }
+                }
                 Write-Host ""
             }
             
@@ -974,12 +1121,23 @@ function Invoke-TerraformDeployment {
 }
 
 function Show-PostDeploymentInfo {
+    param($Config)
+    
     Write-Banner "📋 Important Information & Resources" "Magenta"
+    
+    # Build the list of all authorized IPs
+    $allAuthorizedIPs = @("$($Config.UserPublicIP) (CloudShell)")
+    if ($Config.AdditionalManagementIPs -and $Config.AdditionalManagementIPs.Count -gt 0) {
+        $allAuthorizedIPs += $Config.AdditionalManagementIPs | ForEach-Object { "$_ (Management)" }
+    }
     
     Write-Host "╭─ Security & Access" -ForegroundColor Red
     Write-Host "│" -ForegroundColor Red
-    Write-Host "├─ 🔒 Controller access is restricted to: " -NoNewline -ForegroundColor White
-    Write-Host "$script:UserPublicIP" -ForegroundColor Yellow
+    Write-Host "├─ 🔒 Controller access is restricted to:" -ForegroundColor White
+    foreach ($ip in $allAuthorizedIPs) {
+        Write-Host "│  • " -NoNewline -ForegroundColor White
+        Write-Host "$ip" -ForegroundColor Yellow
+    }
     Write-Host "├─ 🔑 Default username: " -NoNewline -ForegroundColor White
     Write-Host "admin" -ForegroundColor Green
     Write-Host "├─ 🛡️  Consider changing the admin password after first login" -ForegroundColor White
@@ -1042,8 +1200,7 @@ try {
     Write-Host "├─ 🎯 Purpose: Deploy a complete Aviatrix control plane in Azure" -ForegroundColor White
     Write-Host "├─ 📦 Includes: Controller, initialization, and Azure account onboarding" -ForegroundColor White
     Write-Host "├─ ⚡ Optimized: For Azure Cloud Shell with user-friendly prompts" -ForegroundColor White
-    Write-Host "├─ 🔒 Secure: Follows security best practices and least privilege" -ForegroundColor White
-    Write-Host "└─ 🆘 Support: Comprehensive error handling and helpful guidance" -ForegroundColor White
+    Write-Host "└─ 🔒 Secure: Follows security best practices and least privilege" -ForegroundColor White
     Write-Host ""
     
     Write-Info "This wizard will guide you through each step of the deployment process."
@@ -1087,8 +1244,14 @@ try {
         }
         
         Write-Host "├─ " -NoNewline -ForegroundColor Cyan
-        Write-Host "Authorized IP: " -NoNewline -ForegroundColor White
+        Write-Host "CloudShell IP: " -NoNewline -ForegroundColor White
         Write-Host "$($config.UserPublicIP)" -ForegroundColor Yellow
+        
+        if ($config.AdditionalManagementIPs -and $config.AdditionalManagementIPs.Count -gt 0) {
+            Write-Host "├─ " -NoNewline -ForegroundColor Cyan
+            Write-Host "Additional Management IPs: " -NoNewline -ForegroundColor White
+            Write-Host "$($config.AdditionalManagementIPs -join ', ')" -ForegroundColor Yellow
+        }
         
         Write-Host "└─ " -NoNewline -ForegroundColor Cyan
         Write-Host "Terraform Action: " -NoNewline -ForegroundColor White
@@ -1163,7 +1326,7 @@ try {
         
         # Show post-deployment information
         if ($TerraformAction -eq "apply") {
-            Show-PostDeploymentInfo
+            Show-PostDeploymentInfo -Config $config
         }
     }
     
@@ -1247,11 +1410,6 @@ try {
     Write-Host "├─ 📖 Documentation:" -ForegroundColor White
     Write-Host "│  └─ " -NoNewline -ForegroundColor Blue
     Write-Host "https://docs.aviatrix.com" -ForegroundColor Cyan
-    Write-Host "│" -ForegroundColor Blue
-    Write-Host "└─ 💬 Community Forum:" -ForegroundColor White
-    Write-Host "   └─ " -NoNewline -ForegroundColor Blue
-    Write-Host "https://community.aviatrix.com" -ForegroundColor Cyan
-    Write-Host ""
     
     Write-Host "╭─ Cleanup" -ForegroundColor DarkYellow
     Write-Host "│" -ForegroundColor DarkYellow
