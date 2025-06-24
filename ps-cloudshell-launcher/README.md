@@ -49,6 +49,17 @@ The script will prompt you for all required information with helpful guidance.
   -CustomerID "aviatrix-abc-123456"
 ```
 
+### With Additional Management Access
+```powershell
+./deploy-aviatrix-controlplane.ps1 `
+  -DeploymentName "my-avx-ctrl" `
+  -Location "East US" `
+  -AdminEmail "admin@company.com" `
+  -AdminPassword "MySecure123!" `
+  -CustomerID "aviatrix-abc-123456" `
+  -AdditionalManagementIPs "192.168.1.100,10.0.0.0/24,203.0.113.50"
+```
+
 ### Deploy with CoPilot
 ```powershell
 ./deploy-aviatrix-controlplane.ps1 `
@@ -82,6 +93,7 @@ The script will prompt you for all required information with helpful guidance.
 | `CustomerID` | No* | Aviatrix license ID | `"aviatrix-abc-123456"` |
 | `IncludeCopilot` | No | Deploy CoPilot analytics | `$true` or `$false` |
 | `YourPublicIP` | No | Your public IP (auto-detected) | `"203.0.113.1"` |
+| `AdditionalManagementIPs` | No | Additional IPs for controller access | `"192.168.1.100,10.0.0.0/24"` |
 | `SkipConfirmation` | No | Skip interactive prompts | Switch parameter |
 | `TerraformAction` | No | Terraform action | `"plan"`, `"apply"`, `"destroy"` |
 
@@ -89,7 +101,8 @@ The script will prompt you for all required information with helpful guidance.
 
 ## 🔒 Security Features
 
-- **IP Whitelisting**: Controller access restricted to your public IP
+- **Enhanced IP Whitelisting**: Controller access restricted to CloudShell IP + additional management IPs
+- **Flexible Access Control**: Support for individual IPs and CIDR blocks for team access
 - **Secure Credentials**: Passwords handled securely with validation
 - **Azure AD Integration**: Proper RBAC roles and permissions
 - **HTTPS Only**: All web interfaces use SSL/TLS
