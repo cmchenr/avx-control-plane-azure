@@ -7,7 +7,7 @@ A PowerShell script that provides a user-friendly wrapper around the [terraform-
 Execute directly from GitHub (replace with your actual GitHub URL):
 
 ```powershell
-iex (irm https://raw.githubusercontent.com/yourusername/yourrepo/main/ps-cloudshell-launcher/deploy-aviatrix-controlplane.ps1)
+iex (irm https://raw.githubusercontent.com/cmchenr/avx-control-plane-azure/refs/heads/main/ps-cloudshell-launcher/deploy-aviatrix-controlplane.ps1)
 ```
 
 ## 📋 Prerequisites
