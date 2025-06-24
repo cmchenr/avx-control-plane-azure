@@ -43,6 +43,9 @@
 .PARAMETER TerraformAction
     Terraform action to perform: plan, apply, or destroy (default: apply)
     
+.PARAMETER TestMode
+    Run in test mode - validate inputs and generate Terraform files without executing
+    
 .EXAMPLE
     # Interactive deployment with prompts
     ./deploy-aviatrix-controlplane.ps1
@@ -113,7 +116,10 @@ param(
     
     [Parameter(Mandatory = $false)]
     [ValidateSet("plan", "apply", "destroy")]
-    [string]$TerraformAction = "apply"
+    [string]$TerraformAction = "apply",
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$TestMode
 )
 
 # Set strict mode and error preferences
@@ -185,7 +191,13 @@ function Get-UserInput {
         
         if ($IsPassword) {
             $secureInput = Read-Host -Prompt $displayPrompt -AsSecureString
-            $input = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureInput))
+            # Convert SecureString to plain text - more reliable method
+            $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureInput)
+            try {
+                $input = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+            } finally {
+                [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+            }
         } else {
             $input = Read-Host -Prompt $displayPrompt
         }
@@ -220,10 +232,12 @@ function Get-UserInput {
 function Test-Prerequisites {
     Write-Step "Checking prerequisites..."
     
-    # Check if running in Azure Cloud Shell
-    if (-not $env:ACC_CLOUD) {
-        Write-Error "This script must be run in Azure Cloud Shell"
-        throw "Azure Cloud Shell required"
+    # Check if running in Azure Cloud Shell (optional for local testing)
+    if ($env:ACC_CLOUD) {
+        Write-Success "Running in Azure Cloud Shell"
+    } else {
+        Write-Warning "Running locally (not in Azure Cloud Shell)"
+        Write-Host "  This is fine for testing, but production deployments should use Azure Cloud Shell" -ForegroundColor Gray
     }
     
     # Check Azure CLI authentication
@@ -238,18 +252,15 @@ function Test-Prerequisites {
         throw "Authentication required"
     }
     
-    # Install Terraform if needed
+    # Check Terraform installation
     if (-not (Get-Command terraform -ErrorAction SilentlyContinue)) {
-        Write-Step "Installing Terraform..."
-        # Download and install Terraform in Cloud Shell
-        $terraformUrl = "https://releases.hashicorp.com/terraform/1.7.0/terraform_1.7.0_linux_amd64.zip"
-        Invoke-WebRequest -Uri $terraformUrl -OutFile terraform.zip
-        Expand-Archive terraform.zip -DestinationPath ~/bin -Force
-        Remove-Item terraform.zip
-        $env:PATH = "$env:PATH:$HOME/bin"
-        Write-Success "Terraform installed"
+        Write-Error "Terraform not found. Please install Terraform first:"
+        Write-Host "  macOS: brew install terraform" -ForegroundColor Gray
+        Write-Host "  or download from: https://www.terraform.io/downloads.html" -ForegroundColor Gray
+        throw "Terraform required"
     } else {
-        Write-Success "Terraform already available"
+        $terraformVersion = terraform --version | Select-Object -First 1
+        Write-Success "Terraform available: $terraformVersion"
     }
 }
 
@@ -292,13 +303,53 @@ function Get-DeploymentParameters {
     
     if (-not $AdminPassword) {
         Write-Host "Password requirements: 8+ characters, at least one letter, number, and symbol" -ForegroundColor Gray
-        $AdminPassword = Get-UserInput -Prompt "Enter admin password" -IsPassword $true
+        Write-Host "Note: If you experience issues with password input, use the -AdminPassword parameter when calling the script" -ForegroundColor Yellow
         
-        # Validate password
-        if ($AdminPassword.Length -lt 8 -or $AdminPassword -notmatch '\d' -or $AdminPassword -notmatch '[a-zA-Z]' -or $AdminPassword -notmatch '[^a-zA-Z0-9]') {
-            Write-Error "Password does not meet requirements"
-            throw "Invalid password"
-        }
+        do {
+            Write-Host "Enter admin password (input will be masked):" -NoNewline
+            $AdminPassword = ""
+            $key = $null
+            do {
+                $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+                if ($key.VirtualKeyCode -eq 13) { # Enter key
+                    break
+                } elseif ($key.VirtualKeyCode -eq 8) { # Backspace
+                    if ($AdminPassword.Length -gt 0) {
+                        $AdminPassword = $AdminPassword.Substring(0, $AdminPassword.Length - 1)
+                        Write-Host "`b `b" -NoNewline
+                    }
+                } elseif ($key.Character -ne 0 -and $key.VirtualKeyCode -ne 27) { # Regular character (not ESC)
+                    $AdminPassword += $key.Character
+                    Write-Host "*" -NoNewline
+                }
+            } while ($true)
+            Write-Host "" # New line after password input
+            
+            # Check if password is empty
+            if ([string]::IsNullOrWhiteSpace($AdminPassword)) {
+                Write-Host "❌ Password cannot be empty. Please try again." -ForegroundColor Red
+                continue
+            }
+            
+            # Validate password
+            $hasMinLength = $AdminPassword.Length -ge 8
+            $hasLetter = $AdminPassword -match '[a-zA-Z]'
+            $hasNumber = $AdminPassword -match '\d'
+            $hasSymbol = $AdminPassword -match '[\W_]'  # Using \W (non-word) and underscore for symbols
+            
+            if ($hasMinLength -and $hasLetter -and $hasNumber -and $hasSymbol) {
+                $passwordValid = $true
+                Write-Success "Password meets all requirements"
+            } else {
+                $passwordValid = $false
+                Write-Host "❌ Password validation failed:" -ForegroundColor Red
+                if (-not $hasMinLength) { Write-Host "  - Must be at least 8 characters long (current: $($AdminPassword.Length))" -ForegroundColor Red }
+                if (-not $hasLetter) { Write-Host "  - Must contain at least one letter" -ForegroundColor Red }
+                if (-not $hasNumber) { Write-Host "  - Must contain at least one number" -ForegroundColor Red }
+                if (-not $hasSymbol) { Write-Host "  - Must contain at least one symbol (!@#$%^&*()_+-=[]{}|;:,.<>?)" -ForegroundColor Red }
+                Write-Host "Please try again..." -ForegroundColor Yellow
+            }
+        } while (-not $passwordValid)
     }
     
     if (-not $CustomerID) {
@@ -391,6 +442,7 @@ module "aviatrix_controlplane" {
     }
 
     $mainTf += @"
+
 }
 "@
 
@@ -401,13 +453,9 @@ output "deployment_summary" {
   value = {
     controller_public_ip  = module.aviatrix_controlplane.controller_public_ip
     controller_private_ip = module.aviatrix_controlplane.controller_private_ip
-    controller_url       = "https://`${module.aviatrix_controlplane.controller_public_ip}"
+    controller_url       = module.aviatrix_controlplane.controller_public_ip != null ? "https://`${module.aviatrix_controlplane.controller_public_ip}" : null
     copilot_public_ip    = module.aviatrix_controlplane.copilot_public_ip
     copilot_url         = module.aviatrix_controlplane.copilot_public_ip != null ? "https://`${module.aviatrix_controlplane.copilot_public_ip}" : null
-    app_registration = {
-      client_id     = module.aviatrix_controlplane.client_id
-      directory_id  = module.aviatrix_controlplane.directory_id
-    }
     deployment_name     = "$($Config.DeploymentName)"
     location           = "$($Config.Location)"
     admin_email        = "$($Config.AdminEmail)"
@@ -596,12 +644,22 @@ try {
     # Create Terraform configuration
     New-TerraformConfiguration -Config $config
     
-    # Execute Terraform
-    Invoke-TerraformDeployment -Config $config
-    
-    # Show post-deployment information
-    if ($TerraformAction -eq "apply") {
-        Show-PostDeploymentInfo
+    # Execute Terraform or just validate in test mode
+    if ($TestMode) {
+        Write-Banner "Test Mode - Validation Complete" "Green"
+        Write-Host "✅ All parameters validated successfully" -ForegroundColor Green
+        Write-Host "✅ Terraform configuration generated" -ForegroundColor Green
+        Write-Host "✅ Files created in: $TerraformDir" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "To deploy for real, run this script again without -TestMode" -ForegroundColor Yellow
+        Write-Host "Or run 'terraform apply' in the $TerraformDir directory" -ForegroundColor Yellow
+    } else {
+        Invoke-TerraformDeployment -Config $config
+        
+        # Show post-deployment information
+        if ($TerraformAction -eq "apply") {
+            Show-PostDeploymentInfo
+        }
     }
     
 } catch {
