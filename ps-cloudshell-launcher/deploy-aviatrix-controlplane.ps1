@@ -289,7 +289,7 @@ function Get-UserInput {
                 [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
             }
         } else {
-            Write-Host "$displayPrompt: " -NoNewline -ForegroundColor White
+            Write-Host "${displayPrompt}: " -NoNewline -ForegroundColor White
             $input = Read-Host
         }
         
@@ -762,9 +762,9 @@ output "deployment_summary" {
   value = {
     controller_public_ip  = module.aviatrix_controlplane.controller_public_ip
     controller_private_ip = module.aviatrix_controlplane.controller_private_ip
-    controller_url       = module.aviatrix_controlplane.controller_public_ip != null ? "https://`${module.aviatrix_controlplane.controller_public_ip}" : null
+    controller_url       = module.aviatrix_controlplane.controller_public_ip != null ? "https://`$`{module.aviatrix_controlplane.controller_public_ip`}" : null
     copilot_public_ip    = module.aviatrix_controlplane.copilot_public_ip
-    copilot_url         = module.aviatrix_controlplane.copilot_public_ip != null ? "https://`${module.aviatrix_controlplane.copilot_public_ip}" : null
+    copilot_url         = module.aviatrix_controlplane.copilot_public_ip != null ? "https://`$`{module.aviatrix_controlplane.copilot_public_ip`}" : null
     deployment_name     = "$($Config.DeploymentName)"
     location           = "$($Config.Location)"
     admin_email        = "$($Config.AdminEmail)"
@@ -775,14 +775,14 @@ output "deployment_summary" {
 output "connection_info" {
   description = "Connection information for accessing deployed services"
   value = {
-    controller_login_url = "https://`${module.aviatrix_controlplane.controller_public_ip}"
+    controller_login_url = "https://`$`{module.aviatrix_controlplane.controller_public_ip`}"
     controller_username  = "admin"
-    copilot_login_url   = module.aviatrix_controlplane.copilot_public_ip != null ? "https://`${module.aviatrix_controlplane.copilot_public_ip}" : "Not deployed"
+    copilot_login_url   = module.aviatrix_controlplane.copilot_public_ip != null ? "https://`$`{module.aviatrix_controlplane.copilot_public_ip`}" : "Not deployed"
     next_steps = [
-      "1. Access controller at https://`${module.aviatrix_controlplane.controller_public_ip}",
+      "1. Access controller at https://`$`{module.aviatrix_controlplane.controller_public_ip`}",
       "2. Login with username 'admin' and your configured password",
       "3. Your Azure account is already onboarded and ready to use",
-      $($Config.IncludeCopilot ? '"4. Access CoPilot at https://${module.aviatrix_controlplane.copilot_public_ip}"' : '"4. CoPilot not deployed - can be added later if needed"')
+      $($Config.IncludeCopilot ? '"4. Access CoPilot at https://`$`{module.aviatrix_controlplane.copilot_public_ip`}"' : '"4. CoPilot not deployed - can be added later if needed"')
     ]
   }
 }
