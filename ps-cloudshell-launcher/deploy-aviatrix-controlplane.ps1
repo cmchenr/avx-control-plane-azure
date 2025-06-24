@@ -257,6 +257,76 @@ function Test-Prerequisites {
         throw "Authentication required"
     }
     
+    # Check Azure AD app registration permissions
+    Write-Step "Checking Azure AD app registration permissions..."
+    try {
+        # Try to read Azure AD configuration to test permissions
+        $adConfig = az ad app list --query "[0].appId" -o tsv 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            # If the above fails, try a simpler permission check
+            $currentUser = az ad signed-in-user show --query "userPrincipalName" -o tsv 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Azure AD read permissions not available"
+            }
+        }
+        
+        # Test if we can create app registrations by checking current user's directory role
+        $userRoles = az rest --method GET --uri "https://graph.microsoft.com/v1.0/me/memberOf" --query "value[?odataType=='#microsoft.graph.directoryRole'].displayName" -o tsv 2>$null
+        $hasAppRegPermission = $false
+        
+        if ($LASTEXITCODE -eq 0 -and $userRoles) {
+            # Check for roles that can create app registrations
+            $appRegRoles = @("Global Administrator", "Application Administrator", "Application Developer", "Cloud Application Administrator")
+            foreach ($role in $appRegRoles) {
+                if ($userRoles -contains $role) {
+                    $hasAppRegPermission = $true
+                    break
+                }
+            }
+        }
+        
+        # If no elevated role found, check if user can create apps (default setting)
+        if (-not $hasAppRegPermission) {
+            # Try to check tenant settings for user app registration capability
+            $tenantSettings = az rest --method GET --uri "https://graph.microsoft.com/v1.0/policies/authorizationPolicy" --query "defaultUserRolePermissions.allowedToCreateApps" -o tsv 2>$null
+            if ($LASTEXITCODE -eq 0 -and $tenantSettings -eq "true") {
+                $hasAppRegPermission = $true
+            }
+        }
+        
+        if ($hasAppRegPermission) {
+            Write-Success "Azure AD app registration permissions verified"
+        } else {
+            Write-Error "❌ Insufficient Azure AD permissions for app registration"
+            Write-Host ""
+            Write-Host "This deployment requires permissions to create Azure AD applications and service principals." -ForegroundColor Yellow
+            Write-Host "You may need to:" -ForegroundColor Yellow
+            Write-Host "  1. Run 'az login' again to refresh your authentication token" -ForegroundColor Gray
+            Write-Host "  2. Ensure you have one of these roles in Azure AD:" -ForegroundColor Gray
+            Write-Host "     • Global Administrator" -ForegroundColor Gray
+            Write-Host "     • Application Administrator" -ForegroundColor Gray
+            Write-Host "     • Application Developer" -ForegroundColor Gray
+            Write-Host "     • Cloud Application Administrator" -ForegroundColor Gray
+            Write-Host "  3. Or have your tenant configured to allow users to register applications" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "Please resolve the permissions issue and run the script again." -ForegroundColor Yellow
+            Write-Host "If you continue to experience issues, contact your Azure AD administrator." -ForegroundColor Gray
+            throw "Azure AD permissions required"
+        }
+        
+    } catch {
+        if ($_.Exception.Message -eq "Azure AD permissions required") {
+            throw # Re-throw our custom error
+        }
+        Write-Warning "Could not verify Azure AD permissions automatically"
+        Write-Host "  This may be due to tenant restrictions or network connectivity" -ForegroundColor Gray
+        Write-Host "  The deployment will proceed, but may fail if you lack app registration permissions" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "If deployment fails, try running 'az login' again and ensure you have:" -ForegroundColor Yellow
+        Write-Host "  • Global Administrator or Application Administrator role" -ForegroundColor Gray
+        Write-Host "  • Permission to create Azure AD applications" -ForegroundColor Gray
+    }
+    
     # Check Terraform installation
     if (-not (Get-Command terraform -ErrorAction SilentlyContinue)) {
         Write-Error "Terraform not found. Please install Terraform first:"
@@ -672,10 +742,16 @@ try {
     Write-Host ""
     Write-Host "Troubleshooting:" -ForegroundColor Yellow
     Write-Host "  • Check your Azure subscription permissions" -ForegroundColor Gray
+    Write-Host "  • Verify Azure AD app registration permissions (run 'az login' if needed)" -ForegroundColor Gray
     Write-Host "  • Verify all input parameters are correct" -ForegroundColor Gray
     Write-Host "  • Check Azure resource quotas in the selected region" -ForegroundColor Gray
     Write-Host "  • Ensure your Aviatrix customer ID is valid" -ForegroundColor Gray
     Write-Host "  • Review any Terraform error messages above" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "For Azure AD permission issues:" -ForegroundColor Yellow
+    Write-Host "  • Re-run 'az login' to refresh authentication token" -ForegroundColor Gray
+    Write-Host "  • Ensure you have Application Administrator role or higher" -ForegroundColor Gray
+    Write-Host "  • Contact your Azure AD administrator if needed" -ForegroundColor Gray
     Write-Host ""
     Write-Host "For support, visit: https://support.aviatrix.com" -ForegroundColor Gray
     

@@ -16,6 +16,7 @@ iex (irm https://raw.githubusercontent.com/cmchenr/avx-control-plane-azure/refs/
 - **Azure CLI** authenticated (automatic in Cloud Shell)
 - **Valid Aviatrix license** (customer ID)
 - **Appropriate Azure permissions** (Contributor role or equivalent)
+- **Azure AD app registration permissions** (Global Administrator, Application Administrator, or equivalent role)
 
 ## 🎯 What This Script Deploys
 
@@ -149,6 +150,7 @@ Re-run the script with `-IncludeCopilot $true` to add CoPilot to an existing dep
 | Issue | Solution |
 |-------|----------|
 | "Not authenticated" | Run `az login` in Cloud Shell |
+| "Azure AD permissions required" | Run `az login` again or ensure you have Application Administrator role |
 | "Terraform not found" | Script auto-installs - ensure ~/bin is in PATH |
 | "Invalid customer ID" | Contact Aviatrix support for license |
 | "Password validation failed" | Use 8+ chars with letter+number+symbol |
