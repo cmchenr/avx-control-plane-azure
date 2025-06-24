@@ -4,7 +4,9 @@ A PowerShell script that provides a user-friendly wrapper around the [terraform-
 
 ## 🚀 Quick Start - Two-Line Deployment
 
-Download and execute with parameters from GitHub (replace with your actual GitHub URL):
+1. Open the Azure Portal
+2. Launch an Azure Cloud Shell in Powershell mode
+3. Execute the commands below, replacing with your configuration details
 
 ```powershell
 irm https://raw.githubusercontent.com/cmchenr/avx-control-plane-azure/refs/heads/main/ps-cloudshell-launcher/deploy-aviatrix-controlplane.ps1 -OutFile deploy-aviatrix-controlplane.ps1
@@ -210,14 +212,6 @@ See the [examples](examples/) directory for additional deployment scenarios:
 - Full stack with CoPilot
 - Custom networking scenarios
 - Multi-region deployments
-
-## 🤝 Contributing
-
-This script is designed to be simple and self-contained. For enhancements:
-1. Test thoroughly in Azure Cloud Shell
-2. Maintain backward compatibility
-3. Update documentation
-4. Follow PowerShell best practices
 
 ## 📄 License
 

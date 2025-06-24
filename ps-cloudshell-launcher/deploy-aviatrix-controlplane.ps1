@@ -182,7 +182,13 @@ function Write-Banner {
     param([string]$Message, [string]$Color = "Cyan")
     Write-Host ""
     Write-Host "╔" + ("═" * 78) + "╗" -ForegroundColor $Color
-    Write-Host "║" + (" " * ((78 - $Message.Length) / 2 - 1)) + $Message + (" " * (78 - $Message.Length - ((78 - $Message.Length) / 2 - 1))) + "║" -ForegroundColor $Color
+    
+    # Calculate proper spacing for centering
+    $totalWidth = 78
+    $leftSpaces = [math]::Floor(($totalWidth - $Message.Length) / 2)
+    $rightSpaces = $totalWidth - $Message.Length - $leftSpaces
+    
+    Write-Host "║" + (" " * $leftSpaces) + $Message + (" " * $rightSpaces) + "║" -ForegroundColor $Color
     Write-Host "╚" + ("═" * 78) + "╝" -ForegroundColor $Color
     Write-Host ""
 }
