@@ -950,8 +950,9 @@ function Invoke-TerraformDeployment {
         if ($TerraformAction -eq "destroy") {
             Write-Step "Running Terraform destroy..."
             if (-not $SkipConfirmation) {
-                $confirm = Read-Host "Are you sure you want to destroy the deployment? (yes/no)"
-                if ($confirm -ne "yes") {
+                Write-Warning "This will permanently delete all deployed resources!"
+                $confirm = Read-Host "Are you sure you want to destroy the deployment? (y/N)"
+                if ($confirm -notin @("y", "yes", "Y", "YES")) {
                     Write-Warning "Destroy cancelled"
                     return
                 }
@@ -998,12 +999,17 @@ function Invoke-TerraformDeployment {
             }
             Write-Host "├─ 💰 This will create billable Azure resources" -ForegroundColor White
             Write-Host "├─ 🔒 Controller will only be accessible from your IP" -ForegroundColor White
-            Write-Host "└─ ❌ Press Ctrl+C to cancel, or type 'yes' to proceed" -ForegroundColor White
+            Write-Host "└─ ❌ Press Ctrl+C to cancel" -ForegroundColor White
             Write-Host ""
             
-            Write-InputPrompt -Message "Proceed with deployment" -Required $true
+            Write-Host "┌─ " -NoNewline -ForegroundColor Cyan
+            Write-Host "Proceed with deployment? (y/N)" -NoNewline -ForegroundColor White
+            Write-Host " *" -ForegroundColor Red
+            Write-Host "└─ " -NoNewline -ForegroundColor Cyan
+            Write-Host "Enter 'y' to deploy or 'n' to cancel: " -NoNewline -ForegroundColor White
+            
             $confirm = Read-Host
-            if ($confirm -ne "yes") {
+            if ($confirm -notin @("y", "yes", "Y", "YES")) {
                 Write-Warning "Deployment cancelled by user"
                 Write-Info "No resources were created. You can run this script again when ready."
                 return
