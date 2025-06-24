@@ -2,9 +2,17 @@
 
 A PowerShell script that provides a user-friendly wrapper around the [terraform-aviatrix-azure-controlplane](../terraform-aviatrix-azure-controlplane-main/) Terraform module for deploying Aviatrix control plane infrastructure in Azure.
 
-## 🚀 Quick Start - One-Line Deployment
+## 🚀 Quick Start - Two-Line Deployment
 
-Execute directly from GitHub (replace with your actual GitHub URL):
+Download and execute with parameters from GitHub (replace with your actual GitHub URL):
+
+```powershell
+irm https://raw.githubusercontent.com/cmchenr/avx-control-plane-azure/refs/heads/main/ps-cloudshell-launcher/deploy-aviatrix-controlplane.ps1 -OutFile deploy-aviatrix-controlplane.ps1
+./deploy-aviatrix-controlplane.ps1 -DeploymentName "my-avx-ctrl" -Location "East US" -AdminEmail "admin@company.com" -AdminPassword "MySecure123!" -CustomerID "aviatrix-abc-123456"
+```
+
+### One-Line Interactive Mode
+For interactive prompts, you can still use the one-line approach:
 
 ```powershell
 iex (irm https://raw.githubusercontent.com/cmchenr/avx-control-plane-azure/refs/heads/main/ps-cloudshell-launcher/deploy-aviatrix-controlplane.ps1)
